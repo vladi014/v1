@@ -1,14 +1,28 @@
 import time
 import logging
 from config import load_config
-from strategy import ExampleStrategy
+from strategy import (
+    TrendFollowingStrategy,
+    GridTradingStrategy,
+    MeanReversionStrategy,
+    AutoStrategy,
+)
 from execution import ExecutionEngine
 from logger import setup_logger
 
 def main():
     config = load_config('config.yml')
     logger = setup_logger()
-    strategy = ExampleStrategy(config)
+    strat_cfg = config['bot'].get('strategy', {})
+    name = strat_cfg.get('name', 'trend')
+    if name == 'grid':
+        strategy = GridTradingStrategy(config)
+    elif name == 'mean':
+        strategy = MeanReversionStrategy(config)
+    elif name == 'auto':
+        strategy = AutoStrategy(config)
+    else:
+        strategy = TrendFollowingStrategy(config)
     executor = ExecutionEngine(config, logger)
 
     logger.info('Bot de trading iniciado')
