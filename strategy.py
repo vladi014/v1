@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 import ccxt
 import numpy as np
+import pandas as pd
+from ta.trend import ADXIndicator
+from ta.volatility import BollingerBands
 
 class Strategy(ABC):
     def __init__(self, config):
@@ -128,42 +131,51 @@ class MeanReversionStrategy(Strategy):
         return None
 
 class AutoStrategy(Strategy):
-    """Selecciona la mejor estrategia según el estado del mercado."""
+    """Selecciona la mejor estrategia según el régimen de mercado."""
     def __init__(self, config):
         super().__init__(config)
         self.trend = TrendFollowingStrategy(config)
         self.grid = GridTradingStrategy(config)
         self.mean = MeanReversionStrategy(config)
         strat_cfg = config["bot"].get("strategy", {})
-        self.threshold = strat_cfg.get("auto_trend_threshold", 0.01)
+        self.adx_period = strat_cfg.get("adx_period", 14)
+        self.adx_trend = strat_cfg.get("adx_trend", 25)
+        self.bb_period = strat_cfg.get("bb_period", 20)
+        self.bb_dev = strat_cfg.get("bb_dev", 2)
+        self.bbw_high = strat_cfg.get("bbw_high", 0.05)
+        self.bbw_low = strat_cfg.get("bbw_low", 0.02)
+        # Alias para compatibilidad con documentación anterior
+        self.threshold = strat_cfg.get("auto_trend_threshold", self.adx_trend)
 
     def _detect_state(self):
-        limit = max(self.trend.long_window, self.mean.period) + 1
+        limit = max(self.adx_period, self.bb_period, self.trend.long_window, self.mean.period) + 1
         try:
-            ohlcv = self.trend.exchange.fetch_ohlcv(self.trend.symbol, timeframe=self.trend.timeframe, limit=limit)
+            ohlcv = self.trend.exchange.fetch_ohlcv(
+                self.trend.symbol, timeframe=self.trend.timeframe, limit=limit
+            )
         except Exception:
             return "grid"
-        prices = [c[4] for c in ohlcv]
-        short_sma = np.mean(prices[-self.trend.short_window:])
-        long_sma = np.mean(prices[-self.trend.long_window:])
-        diff = abs(short_sma - long_sma) / (long_sma + 1e-9)
-        deltas = np.diff(prices[-(self.mean.period + 1):])
-        ups = np.where(deltas > 0, deltas, 0)
-        downs = np.where(deltas < 0, -deltas, 0)
-        roll_up = np.mean(ups[-self.mean.period:])
-        roll_down = np.mean(downs[-self.mean.period:])
-        rs = roll_up / (roll_down + 1e-9)
-        rsi = 100 - (100 / (1 + rs))
-        if diff > self.threshold:
+        df = pd.DataFrame(ohlcv, columns=["time", "open", "high", "low", "close", "volume"])
+        adx_ind = ADXIndicator(df["high"], df["low"], df["close"], window=self.adx_period)
+        df["adx"] = adx_ind.adx()
+        bb = BollingerBands(df["close"], window=self.bb_period, window_dev=self.bb_dev)
+        df["bbw"] = (bb.bollinger_hband() - bb.bollinger_lband()) / bb.bollinger_mavg()
+        adx_latest = df["adx"].iloc[-1]
+        bbw_latest = df["bbw"].iloc[-1]
+        if adx_latest > self.threshold:
             return "trend"
-        if rsi > self.mean.overbought or rsi < self.mean.oversold:
+        if adx_latest <= self.threshold and bbw_latest > self.bbw_high:
+            return "grid"
+        if adx_latest <= self.threshold and bbw_latest <= self.bbw_low:
             return "mean"
-        return "grid"
+        return None
 
     def generate_signal(self):
         state = self._detect_state()
         if state == "trend":
             return self.trend.generate_signal()
-        elif state == "mean":
+        if state == "grid":
+            return self.grid.generate_signal()
+        if state == "mean":
             return self.mean.generate_signal()
-        return self.grid.generate_signal()
+        return None

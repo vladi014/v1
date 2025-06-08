@@ -46,8 +46,11 @@ trading_bot_template/
      `grid_upper` y `grid_step`.
    - **mean**: reversión a la media con RSI; configura
      `rsi_period`, `overbought` y `oversold`.
-   - **auto**: selección dinámica de estrategia según el mercado.
-     Ajusta `auto_trend_threshold` para determinar cuándo considerar tendencia.
+   - **auto**: selección dinámica basada en indicadores de ADX y
+     Bandas de Bollinger. Configura `adx_period`, `adx_trend`,
+     `bb_period`, `bb_dev`, `bbw_high` y `bbw_low`. Usa
+     `auto_trend_threshold` (igual a `adx_trend`) para decidir cuándo
+     hay tendencia.
    No olvides rellenar tus claves de API.
 
 ## Advertencia

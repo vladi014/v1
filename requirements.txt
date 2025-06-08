@@ -2,3 +2,4 @@ ccxt
 PyYAML
 pandas
 numpy
+ta

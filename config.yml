@@ -21,4 +21,10 @@ bot:
     rsi_period: 14
     overbought: 70
     oversold: 30
-    auto_trend_threshold: 0.01
+    adx_period: 14
+    adx_trend: 25
+    bb_period: 20
+    bb_dev: 2
+    bbw_high: 0.05
+    bbw_low: 0.02
+    auto_trend_threshold: 25
