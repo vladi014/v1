@@ -1,0 +1,4 @@
+ccxt
+PyYAML
+pandas
+numpy
